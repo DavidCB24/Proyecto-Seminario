@@ -3,6 +3,7 @@
 import os
 import hmac
 import hashlib
+import pytds
 from typing import Optional
 
 import pyodbc
@@ -16,10 +17,37 @@ from utils import pbkdf2_hash_password, PBKDF2_ITER, PBKDF2_DKLEN
 # ---------------------------------------------------------------------------
 
 def get_connection():
-    """
-    Abre conexión directamente a la base definida en config.ODBC_STRING.
-    """
-    return pyodbc.connect(config.ODBC_STRING)
+    kwargs = dict(
+        server=config.MSSQL_SERVER,
+        port=int(config.MSSQL_PORT),
+        database=config.MSSQL_DATABASE,
+        user=config.MSSQL_USER,
+        password=config.MSSQL_PASSWORD,
+        use_tz=False,
+    )
+
+    # Intento preferido (pytds >= 1.12): cifrado + no validar host (equivalente a TrustServerCertificate=Yes)
+    try:
+        return pytds.connect(
+            **kwargs,
+            encrypt=True,          # <-- TLS ON (requerido por Azure)
+            validate_host=False,   # <-- como TrustServerCertificate=Yes
+            tds_version='7.4',     # <-- SQL Server/Azure
+        )
+    except TypeError:
+        # Fallback para pytds antiguos (algunos no aceptan validate_host / tds_version)
+        try:
+            return pytds.connect(**kwargs, encrypt=True, validate_host=False)
+        except TypeError:
+            # Fallback mínimo: solo encrypt=True
+            return pytds.connect(**kwargs, encrypt=True)
+
+#conexion anterior
+#def get_connection():
+ #   """
+  #  Abre conexión directamente a la base definida en config.ODBC_STRING.
+   # """
+    #return pyodbc.connect(config.ODBC_STRING)
 
 # ---------------------------------------------------------------------------
 # Utilidades SQL
