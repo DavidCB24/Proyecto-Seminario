@@ -4,3 +4,4 @@ make
 unixodbc
 unixodbc-dev
 tdsodbc
+freetds-bin
