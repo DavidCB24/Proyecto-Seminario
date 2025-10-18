@@ -5,3 +5,5 @@ unixodbc
 unixodbc-dev
 tdsodbc
 freetds-bin
+freetds-dev
+libtdsodbc0
