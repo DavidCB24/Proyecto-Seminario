@@ -182,20 +182,26 @@ def user_get_by_email(email: str):
         (email,),
     )
 
-def user_create(email: str, first: str, last: str, password: str) -> Optional[int]:
-    salt = os.urandom(16)  # 128-bit
+def user_create(email: str, first: str, last: str, password: str) -> Optional[str]:
+    salt = os.urandom(16)
     hash_bytes = pbkdf2_hash_password(password, salt, PBKDF2_ITER, PBKDF2_DKLEN)
+
     sql = """
-    INSERT INTO dbo.Users (Email, FirstName, LastName, PasswordHash, PasswordSalt, IsActive, CreatedAt)
-    VALUES (?, ?, ?, ?, ?, 1, SYSUTCDATETIME());
-    SELECT CAST(SCOPE_IDENTITY() AS INT);
+        INSERT INTO dbo.Users (Email, FirstName, LastName, PasswordHash, PasswordSalt, IsActive, CreatedAt)
+        OUTPUT INSERTED.UserID   -- <--- devuelve el GUID recién creado
+        VALUES (?, ?, ?, ?, ?, 1, SYSUTCDATETIME());
     """
+
     with get_connection() as cn:
-        cur = cn.cursor()
-        cur.execute(sql, (email, first, last, hash_bytes, salt))
-        row = cur.fetchone()
-        cn.commit()
-    return int(row[0]) if row else None
+        try:
+            cur = cn.cursor()
+            cur.execute(sql, (email, first, last, pyodbc.Binary(hash_bytes), pyodbc.Binary(salt)))
+            row = cur.fetchone()                      # ahora sí hay fila
+            cn.commit()
+            return str(row[0]) if row else None       # GUID como string
+        except pyodbc.Error:
+            cn.rollback()
+            raise
 
 def user_update_password(user_id: int, new_password: str) -> None:
     salt = os.urandom(16)
